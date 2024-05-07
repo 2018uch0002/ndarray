@@ -6,18 +6,21 @@ project(NDArray
   LANGUAGES CXX
 )
 
-include(CMakePackageConfigHelpers)
+# Get FetchContent for downloading dependencies
+include(FetchContent)
 
 #===============================================================================
 # Get Boost
 message(STATUS "Downloading Boost 1.81.0")
-set(BOOST_INCLUDE_LIBRARIES container)
+set(BOOST_INCLUDE_LIBRARIES container unordered)
 set(BOOST_ENABLE_CMAKE ON)
 FetchContent_Declare(Boost
   GIT_REPOSITORY https://github.com/boostorg/boost.git
   GIT_TAG        boost-1.81.0
 )
 FetchContent_MakeAvailable(Boost)
+
+include(CMakePackageConfigHelpers)
 
 # Add options
 option(NDARRAY_INSTALL "Install NDArray" ON)
