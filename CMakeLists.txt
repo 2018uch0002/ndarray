@@ -8,6 +8,17 @@ project(NDArray
 
 include(CMakePackageConfigHelpers)
 
+#===============================================================================
+# Get Boost
+message(STATUS "Downloading Boost 1.81.0")
+set(BOOST_INCLUDE_LIBRARIES container)
+set(BOOST_ENABLE_CMAKE ON)
+FetchContent_Declare(Boost
+  GIT_REPOSITORY https://github.com/boostorg/boost.git
+  GIT_TAG        boost-1.81.0
+)
+FetchContent_MakeAvailable(Boost)
+
 # Add options
 option(NDARRAY_INSTALL "Install NDArray" ON)
 

@@ -35,7 +35,7 @@
  * */
 #ifndef NDARRAY_H
 #define NDARRAY_H
-
+#include <iostream>
 #include <algorithm>
 #include <array>
 #include <complex>
@@ -46,6 +46,7 @@
 #include <string>
 #include <typeinfo>
 #include <vector>
+#include <boost/container/static_vector.hpp>
 
 // Macro to force function to be inlined. This is done for speed and to try and
 // force the compiler to vectorize operatrions.
@@ -66,10 +67,17 @@ class NDArray {
   // Constructors and Destructors
   NDArray();
   NDArray(const std::vector<size_t>& init_shape, bool c_continuous = true);
+  
+  template<std::size_t N_dimension_>
+  NDArray(boost::container::static_vector<std::size_t, N_dimension_>& init_shape, bool c_continuous = true);
+
+
   NDArray(const std::vector<T>& data, const std::vector<size_t>& init_shape,
           bool c_continuous = true);
   NDArray(std::vector<T>&& data, const std::vector<size_t>& init_shape,
           bool c_continuous = true);
+
+
   ~NDArray() = default;
   NDArray(const NDArray&) = default;
   NDArray(NDArray&&) = default;
@@ -87,6 +95,14 @@ class NDArray {
   // Indexing operators for indexing with vector
   T& operator()(const std::vector<size_t>& indices);
   const T& operator()(const std::vector<size_t>& indices) const;
+
+  template <typename std::size_t ND_>
+  T& operator()(const boost::container::static_vector<size_t, ND_>& indices);
+
+  template <typename std::size_t ND_>
+  const T& operator()(const boost::container::static_vector<size_t, ND_>& indices) const;
+
+
 
   // Variadic indexing operators
   // Access data with array indices.
@@ -140,6 +156,9 @@ class NDArray {
   // Realocates array to fit the new size.
   // DATA CAN BE LOST IF ARRAY IS SHRUNK
   void reallocate(const std::vector<size_t>& new_shape);
+
+  template <std::size_t N_dimension_>
+  void reallocate(const boost::container::static_vector<size_t, N_dimension_>& new_shape);
 
   //==========================================================================
   // Operators for Any Type (Same or Different)
@@ -268,6 +287,33 @@ NDArray<T>::NDArray(const std::vector<size_t>& init_shape, bool c_continuous) {
 
     c_continuous_ = c_continuous;
 
+  } else {
+    std::string mssg = "NDArray shape vector must have at least one element.";
+    throw std::runtime_error(mssg);
+  }
+}
+
+template <class T>
+template <std::size_t N_dimension_>
+NDArray<T>::NDArray(boost::container::static_vector<std::size_t, N_dimension_>& init_shape, bool c_continuous) {
+  if (init_shape.size() > 0) {
+    shape_.clear();
+    shape_.reserve( init_shape.size() );
+
+    for (std::size_t c : init_shape) {
+        shape_.push_back(c);
+    }
+
+    dimensions_ = shape_.size();
+
+    std::size_t ne = init_shape[0];
+    for (std::size_t i = 1; i < dimensions_; i++) {
+        ne *= init_shape[i];
+    }
+
+    data_.resize(ne);
+
+    c_continuous_ = c_continuous;
   } else {
     std::string mssg = "NDArray shape vector must have at least one element.";
     throw std::runtime_error(mssg);
@@ -428,6 +474,65 @@ NDARRAY_INLINE T& NDArray<T>::operator()(const std::vector<size_t>& indices) {
 template <class T>
 NDARRAY_INLINE const T& NDArray<T>::operator()(
     const std::vector<size_t>& indices) const {
+  size_t indx;
+  if (c_continuous_) {
+    // Get linear index for row-major order
+    indx = c_continuous_index(indices);
+  } else {
+    // Get linear index for column-major order
+    indx = fortran_continuous_index(indices);
+  }
+  return data_[indx];
+}
+
+template <class T>
+template <typename std::size_t ND_>
+T& NDArray<T>::operator()(const boost::container::static_vector<size_t, ND_>& static_indices){
+  
+  std::vector<size_t> indices;
+  indices.reserve( static_indices.size() ); 
+  for ( auto& c : static_indices ){
+    indices.push_back(c);
+  }
+
+  /*size_t size_static_indices = static_indices.size();
+
+  std::array<std::size_t, size_static_indices> indices;
+  indices.fill(0);
+
+  for( std::size_t i = 0; i < size_static_indices; i++){
+    indices[i] = static_indices[i];
+  }*/
+  
+  size_t indx;
+  if (c_continuous_) {
+    // Get linear index for row-major order
+    indx = c_continuous_index(indices);
+  } else {
+    // Get linear index for column-major order
+    indx = fortran_continuous_index(indices);
+  }
+  return data_[indx];
+}
+
+template <class T>
+template <typename std::size_t ND_>
+const T& NDArray<T>::operator()(const boost::container::static_vector<size_t, ND_>& static_indices) const{
+
+  std::vector<size_t> indices;
+  indices.reserve( static_indices.size() ); 
+  for ( auto& c : static_indices ){
+    indices.push_back(c);
+  }
+  /*size_t size_static_indices = static_indices.size();
+
+  std::array<std::size_t, size_static_indices> indices;
+  indices.fill(0);
+
+  for( std::size_t i = 0; i < size_static_indices; i++){
+    indices[i] = static_indices[i];
+  }*/
+    
   size_t indx;
   if (c_continuous_) {
     // Get linear index for row-major order
@@ -634,6 +739,32 @@ void NDArray<T>::reallocate(const std::vector<size_t>& new_shape) {
     data_.resize(ne);
   }
 }
+
+template <class T>
+template <std::size_t N_dimension_>
+void NDArray<T>::reallocate(const boost::container::static_vector<size_t, N_dimension_>& new_shape) {
+  // Ensure new shape has proper dimensions
+  if (new_shape.size() < 1) {
+    std::string mssg =
+        "Shape vector must have at least one element to"
+        " reallocate NDArray.";
+    throw std::runtime_error(mssg);
+  } else {
+    size_t ne = new_shape[0];
+
+    for (size_t i = 1; i < new_shape.size(); i++) {
+      ne *= new_shape[i];
+    }
+    shape_.clear();
+    shape_.reserve( new_shape.size() );
+    for( std::size_t c : new_shape){
+      shape_.push_back(c);
+    }
+    dimensions_ = shape_.size();
+    data_.resize(ne);
+  }
+}
+
 
 template <class T>
 template <class C>
