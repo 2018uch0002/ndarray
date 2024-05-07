@@ -10,7 +10,7 @@ project(NDArray
 include(FetchContent)
 
 #===============================================================================
-# Get Boost
+# Get Boost Container ( for static_vector.hpp )
 message(STATUS "Downloading Boost 1.81.0")
 set(BOOST_INCLUDE_LIBRARIES container unordered)
 set(BOOST_ENABLE_CMAKE ON)
